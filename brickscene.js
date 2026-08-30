@@ -5,6 +5,10 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import * as BufferGeometryUtils from "three/addons/utils/BufferGeometryUtils.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { GTAOPass } from "three/addons/postprocessing/GTAOPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 
 export const PALETTE = [
   0xf4f4f4, 0xe6e3da, 0xc9cbc8, 0xa3a2a4, 0x898788, 0x635f61, 0x2b2b2c,
@@ -66,9 +70,11 @@ const AO_OFFSETS = (() => {
 const AO_WTOTAL = AO_OFFSETS.reduce((s, o) => s + o[3], 0);
 
 // An unoccluded flat wall sits near 0.5; anything above that is a crevice.
+// Kept moderate: this handles the large-scale crevices, GTAO does the fine
+// detail around stud bases and brick seams.
 const AO_KNEE = 0.46;
-const AO_STRENGTH = 1.15;
-const AO_FLOOR = 0.30;
+const AO_STRENGTH = 0.80;
+const AO_FLOOR = 0.42;
 
 function occlusionAt(vox, x, y, z) {
   let occ = 0;
@@ -142,6 +148,26 @@ export class BrickScene {
     ground.receiveShadow = true;
     scene.add(ground);
 
+    // Ground-truth ambient occlusion around stud bases and brick seams — the
+    // detail that makes an assembly read as plastic rather than painted blocks.
+    const composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, this.camera));
+    const gtao = new GTAOPass(scene, this.camera, innerWidth, innerHeight);
+    gtao.output = GTAOPass.OUTPUT.Default;
+    gtao.blendIntensity = 0.85;
+    gtao.updateGtaoMaterial({
+      radius: 0.62, distanceExponent: 1, thickness: 1.4,
+      scale: 1.0, samples: 16, distanceFallOff: 1, screenSpaceRadius: false,
+    });
+    gtao.updatePdMaterial({
+      lumaPhi: 10, depthPhi: 2, normalPhi: 3,
+      radius: 3, radiusExponent: 1, rings: 2, samples: 8,
+    });
+    composer.addPass(gtao);
+    composer.addPass(new OutputPass());
+    this.composer = composer;
+    this.gtao = gtao;
+
     this._onResize = () => this.resize();
     addEventListener("resize", this._onResize);
     this.resize();
@@ -151,6 +177,8 @@ export class BrickScene {
   resize() {
     const w = innerWidth, h = innerHeight;
     this.renderer.setSize(w, h, false);
+    this.composer.setSize(w, h);
+    this.gtao.setSize(w, h);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     if (this.figure) this.fitCamera();
@@ -264,6 +292,10 @@ export class BrickScene {
     this.camera.position.copy(center).addScaledVector(dir, dist);
     this.controls.minDistance = dist * 0.3;
     this.controls.maxDistance = dist * 3.5;
+    // A snug depth range keeps the AO prepass precise.
+    this.camera.near = Math.max(0.1, dist * 0.05);
+    this.camera.far = dist * 4.5;
+    this.camera.updateProjectionMatrix();
     this.controls.update();
 
     // keep the shadow frustum snug around the model
@@ -284,7 +316,7 @@ export class BrickScene {
   }
 
   snapshot(filename = "legoify.png") {
-    this.renderer.render(this.scene, this.camera);
+    this.composer.render();
     const a = document.createElement("a");
     a.download = filename;
     a.href = this.renderer.domElement.toDataURL("image/png");
@@ -324,6 +356,6 @@ export class BrickScene {
 
     if (this.figure && !this.userTouched && !this.animating) this.figure.rotation.y += 0.0018;
     this.controls.update();
-    this.renderer.render(this.scene, this.camera);
+    this.composer.render();
   }
 }
