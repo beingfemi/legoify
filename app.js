@@ -99,8 +99,8 @@ const SHOULDER_X = 7.2;
 
 const POSES = {
   stand: { L: [-9.6, 24.5, 1.0], R: [9.6, 24.5, 1.0] },
-  point: { L: [-9.6, 24.5, 1.0], R: [9.0, 54.0, 1.8] },
-  cheer: { L: [-9.0, 54.0, 1.8], R: [9.0, 54.0, 1.8] },
+  point: { L: [-9.6, 24.5, 1.0], R: [11.8, 55.0, 1.8] },
+  cheer: { L: [-11.8, 55.0, 1.8], R: [11.8, 55.0, 1.8] },
 };
 let currentPose = "stand";
 
@@ -121,44 +121,44 @@ function buildVoxels() {
         let c = null;
 
         // legs — kept far enough apart to leave a real gap
-        for (const sx of [-3.1, 3.1]) {
-          if (distToSegment(x, y, z, sx, 16.5, 0, sx, 3.0, 0) <= 2.2) c = COLORS.pants;
+        for (const sx of [-3.9, 3.9]) {
+          if (distToSegment(x, y, z, sx, 22.0, 0, sx, 4.2, 0) <= 2.9) c = COLORS.pants;
         }
         // feet
-        for (const sx of [-3.1, 3.1]) {
-          if (inEllipsoid(x, y, z, sx, 1.3, 1.4, 2.3, 1.4, 3.6)) c = COLORS.shoe;
+        for (const sx of [-3.9, 3.9]) {
+          if (inEllipsoid(x, y, z, sx, 1.8, 1.8, 3.0, 1.9, 4.7)) c = COLORS.shoe;
         }
         // hips
-        if (inEllipsoid(x, y, z, 0, 16.8, 0, 4.6, 3.1, 3.3)) c = COLORS.pants;
+        if (inEllipsoid(x, y, z, 0, 22.6, 0, 6.0, 4.0, 4.3)) c = COLORS.pants;
 
         // torso — tapered ellipse per height
-        if (y >= 17.0 && y <= 29.2) {
-          const t = (y - 17.0) / 12.2;
-          const rx = THREE.MathUtils.lerp(4.2, 6.2, t);
-          const rz = THREE.MathUtils.lerp(3.0, 4.0, t);
+        if (y >= 23.0 && y <= 38.8) {
+          const t = (y - 23.0) / 15.8;
+          const rx = THREE.MathUtils.lerp(5.4, 7.5, t);
+          const rz = THREE.MathUtils.lerp(3.9, 5.1, t);
           if ((x / rx) ** 2 + (z / rz) ** 2 <= 1) c = COLORS.shirt;
         }
 
         // arms — shoulder → elbow → hand, sleeve on the upper half
         for (const { sx, hand } of arms) {
-          const ex = (sx + hand[0]) / 2 + Math.sign(sx) * 0.35;
+          const ex = (sx + hand[0]) / 2 + Math.sign(sx) * 1.4;
           const ey = (SHOULDER_Y + hand[1]) / 2;
           const ez = hand[2] / 2;
           const dUp = distToSegment(x, y, z, sx, SHOULDER_Y, 0, ex, ey, ez);
           const dLo = distToSegment(x, y, z, ex, ey, ez, hand[0], hand[1], hand[2]);
-          if (dUp <= 1.95) c = COLORS.shirt;
-          if (dLo <= 1.7) c = COLORS.skin;
-          if (inEllipsoid(x, y, z, hand[0], hand[1], hand[2], 2.0, 2.0, 2.0)) c = COLORS.skin;
+          if (dUp <= 2.6) c = COLORS.shirt;
+          if (dLo <= 2.25) c = COLORS.skin;
+          if (inEllipsoid(x, y, z, hand[0], hand[1], hand[2], 2.7, 2.7, 2.7)) c = COLORS.skin;
         }
 
         // neck + head
-        if (distToSegment(x, y, z, 0, 29.0, 0, 0, 31.8, 0) <= 2.2) c = COLORS.skin;
-        if (inEllipsoid(x, y, z, 0, 35.4, 0, 5.2, 5.6, 5.0)) {
+        if (distToSegment(x, y, z, 0, 38.6, 0, 0, 42.4, 0) <= 2.9) c = COLORS.skin;
+        if (inEllipsoid(x, y, z, 0, 47.4, 0, 6.9, 7.4, 6.6)) {
           c = COLORS.skin;
           // hair: crown + back, wrapping down the sides but never over the face
-          const crown = y >= 37.0;
-          const back = z <= -1.6 && y >= 33.0;
-          const sides = Math.abs(x) >= 3.9 && z <= 1.2 && y >= 33.5;
+          const crown = y >= 49.6;
+          const back = z <= -2.2 && y >= 44.0;
+          const sides = Math.abs(x) >= 5.2 && z <= 1.6 && y >= 44.5;
           if (crown || back || sides) c = COLORS.hair;
         }
 
@@ -179,15 +179,21 @@ function addFace(vox, key) {
   };
   const row = (worldY) => Math.round(worldY / BH);
 
-  const eyeRow = row(36.2);
-  for (const ix of [-2, 2]) {
+  // eyes — two bricks wide each
+  const eyeRow = row(48.4);
+  for (const ix of [-4, -3, 3, 4]) {
     const iz = frontmost(ix, eyeRow);
     if (iz !== null) vox.set(key(ix, eyeRow, iz), EYE);
   }
-  const mouthRow = row(32.8);
+  // nose — one brick pushed proud of the face
+  const noseRow = row(46.0);
+  const noseZ = frontmost(0, noseRow);
+  if (noseZ !== null) vox.set(key(0, noseRow, noseZ + 1), COLORS.skin);
+  // mouth
+  const mouthRow = row(43.0);
   for (const ix of [-1, 0, 1]) {
     const iz = frontmost(ix, mouthRow);
-    if (iz !== null) vox.set(key(ix, mouthRow, iz), 0x7c0a02);
+    if (iz !== null) vox.set(key(ix, mouthRow, iz), 0x5c3c2e);
   }
 }
 
@@ -345,7 +351,9 @@ function fitCamera() {
   const fov = THREE.MathUtils.degToRad(camera.fov);
   const fitH = size.y / (2 * Math.tan(fov / 2));
   const fitW = size.x / (2 * Math.tan(fov / 2) * camera.aspect);
-  const dist = Math.max(fitH, fitW) * 1.34;
+  const dist = Math.max(fitH, fitW) * 1.42;
+  // lift the figure slightly so the dock never covers the feet
+  center.y -= size.y * 0.05;
 
   const dir = camera.position.clone().sub(controls.target);
   if (dir.lengthSq() < 1e-6) dir.set(0.34, 0.2, 1);
