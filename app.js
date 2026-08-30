@@ -92,15 +92,15 @@ const inEllipsoid = (px, py, pz, cx, cy, cz, rx, ry, rz) =>
 
 // ─────────────────────────── Character model ───────────────────────────
 // Grid indices; world = (ix*BW, iy*BH, iz*BW). Figure stands on y = 0.
-const GX = 12, GY = 36, GZ = 8;
+const GX = 16, GY = 48, GZ = 11;
 
-const SHOULDER_Y = 28.0;
-const SHOULDER_X = 5.9;
+const SHOULDER_Y = 37.6;
+const SHOULDER_X = 7.2;
 
 const POSES = {
-  stand: { L: [-8.0, 17.5, 0.8], R: [8.0, 17.5, 0.8] },
-  point: { L: [-8.0, 17.5, 0.8], R: [7.4, 40.0, 1.4] },
-  cheer: { L: [-7.4, 40.0, 1.4], R: [7.4, 40.0, 1.4] },
+  stand: { L: [-9.6, 24.5, 1.0], R: [9.6, 24.5, 1.0] },
+  point: { L: [-9.6, 24.5, 1.0], R: [9.0, 54.0, 1.8] },
+  cheer: { L: [-9.0, 54.0, 1.8], R: [9.0, 54.0, 1.8] },
 };
 let currentPose = "stand";
 
@@ -146,19 +146,19 @@ function buildVoxels() {
           const ez = hand[2] / 2;
           const dUp = distToSegment(x, y, z, sx, SHOULDER_Y, 0, ex, ey, ez);
           const dLo = distToSegment(x, y, z, ex, ey, ez, hand[0], hand[1], hand[2]);
-          if (dUp <= 2.15) c = COLORS.shirt;
-          if (dLo <= 1.95) c = COLORS.skin;
-          if (inEllipsoid(x, y, z, hand[0], hand[1], hand[2], 2.3, 2.3, 2.3)) c = COLORS.skin;
+          if (dUp <= 1.95) c = COLORS.shirt;
+          if (dLo <= 1.7) c = COLORS.skin;
+          if (inEllipsoid(x, y, z, hand[0], hand[1], hand[2], 2.0, 2.0, 2.0)) c = COLORS.skin;
         }
 
         // neck + head
-        if (distToSegment(x, y, z, 0, 29.0, 0, 0, 31.5, 0) <= 2.2) c = COLORS.skin;
-        if (inEllipsoid(x, y, z, 0, 35.6, 0, 5.7, 5.9, 5.3)) {
+        if (distToSegment(x, y, z, 0, 29.0, 0, 0, 31.8, 0) <= 2.2) c = COLORS.skin;
+        if (inEllipsoid(x, y, z, 0, 35.4, 0, 5.2, 5.6, 5.0)) {
           c = COLORS.skin;
-          // hair: crown, back of head, and short sides
-          const crown = y >= 37.8;
-          const back = z <= -2.2 && y >= 33.0;
-          const sides = Math.abs(x) >= 4.0 && y >= 35.0;
+          // hair: crown + back, wrapping down the sides but never over the face
+          const crown = y >= 37.0;
+          const back = z <= -1.6 && y >= 33.0;
+          const sides = Math.abs(x) >= 3.9 && z <= 1.2 && y >= 33.5;
           if (crown || back || sides) c = COLORS.hair;
         }
 
@@ -179,18 +179,12 @@ function addFace(vox, key) {
   };
   const row = (worldY) => Math.round(worldY / BH);
 
-  const eyeRow = row(36.4);
-  for (const ix of [-3, -2, 2, 3]) {
+  const eyeRow = row(36.2);
+  for (const ix of [-2, 2]) {
     const iz = frontmost(ix, eyeRow);
     if (iz !== null) vox.set(key(ix, eyeRow, iz), EYE);
   }
-  // brow line just above the eyes
-  const browRow = eyeRow + 1;
-  for (const ix of [-3, -2, 2, 3]) {
-    const iz = frontmost(ix, browRow);
-    if (iz !== null) vox.set(key(ix, browRow, iz), COLORS.hair);
-  }
-  const mouthRow = row(32.6);
+  const mouthRow = row(32.8);
   for (const ix of [-1, 0, 1]) {
     const iz = frontmost(ix, mouthRow);
     if (iz !== null) vox.set(key(ix, mouthRow, iz), 0x7c0a02);
@@ -228,30 +222,28 @@ function initScene() {
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
-  camera = new THREE.PerspectiveCamera(34, 1, 0.5, 400);
-  camera.position.set(26, 26, 52);
+  camera = new THREE.PerspectiveCamera(34, 1, 0.5, 500);
+  camera.position.set(30, 26, 88);
 
   controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
   controls.dampingFactor = 0.07;
-  controls.minDistance = 22;
-  controls.maxDistance = 120;
-  controls.target.set(0, 17, 0);
+  controls.target.set(0, 22, 0);
   controls.addEventListener("start", () => { userTouched = true; });
 
   const key = new THREE.DirectionalLight(0xffffff, 2.6);
-  key.position.set(20, 34, 24);
+  key.position.set(32, 56, 40);
   key.castShadow = true;
   key.shadow.mapSize.set(2048, 2048);
   key.shadow.radius = 4;
-  key.shadow.bias = -0.0009;
-  const d = 26;
-  Object.assign(key.shadow.camera, { left: -d, right: d, top: d + 12, bottom: -d, near: 1, far: 110 });
+  key.shadow.bias = -0.0007;
+  const d = 40;
+  Object.assign(key.shadow.camera, { left: -d, right: d, top: d + 16, bottom: -d, near: 1, far: 190 });
   key.shadow.camera.updateProjectionMatrix();
   scene.add(key);
 
   const rim = new THREE.DirectionalLight(0xffffff, 0.7);
-  rim.position.set(-22, 16, -20);
+  rim.position.set(-34, 26, -32);
   scene.add(rim);
   scene.add(new THREE.AmbientLight(0xffffff, 0.35));
 
@@ -275,6 +267,7 @@ function onResize() {
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
+  if (figure) fitCamera();
 }
 
 // ─────────────────────────── Assembly ───────────────────────────
@@ -339,7 +332,30 @@ function buildFigure() {
 
   scene.add(figure);
   tallyEl.textContent = `${total.toLocaleString()} bricks`;
+  fitCamera();
   startAssembly();
+}
+
+// Frame the whole figure, keeping whatever direction the user is viewing from.
+function fitCamera() {
+  const box = new THREE.Box3().setFromObject(figure);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+
+  const fov = THREE.MathUtils.degToRad(camera.fov);
+  const fitH = size.y / (2 * Math.tan(fov / 2));
+  const fitW = size.x / (2 * Math.tan(fov / 2) * camera.aspect);
+  const dist = Math.max(fitH, fitW) * 1.34;
+
+  const dir = camera.position.clone().sub(controls.target);
+  if (dir.lengthSq() < 1e-6) dir.set(0.34, 0.2, 1);
+  dir.normalize();
+
+  controls.target.copy(center);
+  camera.position.copy(center).addScaledVector(dir, dist);
+  controls.minDistance = dist * 0.35;
+  controls.maxDistance = dist * 3.5;
+  controls.update();
 }
 
 function startAssembly() {
@@ -370,7 +386,7 @@ function tick() {
     animating = busy;
   }
 
-  if (figure && !userTouched) figure.rotation.y += 0.0035;
+  if (figure && !userTouched && !animating) figure.rotation.y += 0.0018;
   controls.update();
   renderer.render(scene, camera);
 }
