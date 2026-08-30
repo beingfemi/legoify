@@ -307,11 +307,9 @@ export class BrickScene {
     this.camera.position.copy(center).addScaledVector(dir, dist);
     this.controls.minDistance = dist * 0.3;
     this.controls.maxDistance = dist * 3.5;
-    // A snug depth range keeps the AO prepass precise.
-    this.camera.near = Math.max(0.1, dist * 0.05);
-    this.camera.far = dist * 4.5;
-    this.camera.updateProjectionMatrix();
+    this._radius = size.length() * 0.5;
     this.controls.update();
+    this._updateClip();
 
     // keep the shadow frustum snug around the model
     const r = Math.max(size.x, size.z) * 0.75 + size.y * 0.35;
@@ -325,6 +323,20 @@ export class BrickScene {
     this.scene.add(this.keyLight.target);
   }
 
+  // Keep the depth range snug around the model at whatever zoom the user is at:
+  // wide enough never to clip it, tight enough for a precise AO prepass.
+  _updateClip() {
+    if (!this._radius) return;
+    const d = this.camera.position.distanceTo(this.controls.target);
+    const near = Math.max(0.1, d - this._radius * 1.6);
+    const far = d + this._radius * 3.5;
+    if (near !== this.camera.near || far !== this.camera.far) {
+      this.camera.near = near;
+      this.camera.far = far;
+      this.camera.updateProjectionMatrix();
+    }
+  }
+
   replay() {
     this.animStart = performance.now() / 1000;
     this.animating = true;
@@ -332,9 +344,19 @@ export class BrickScene {
 
   snapshot(filename = "legoify.png") {
     this.composer.render();
+    // The canvas is transparent, so flatten onto white before saving.
+    const src = this.renderer.domElement;
+    const out = document.createElement("canvas");
+    out.width = src.width;
+    out.height = src.height;
+    const g = out.getContext("2d");
+    g.fillStyle = "#ffffff";
+    g.fillRect(0, 0, out.width, out.height);
+    g.drawImage(src, 0, 0);
+
     const a = document.createElement("a");
     a.download = filename;
-    a.href = this.renderer.domElement.toDataURL("image/png");
+    a.href = out.toDataURL("image/png");
     a.click();
   }
 
@@ -371,6 +393,7 @@ export class BrickScene {
 
     if (this.figure && !this.userTouched && !this.animating) this.figure.rotation.y += 0.0018;
     this.controls.update();
+    this._updateClip();
     this.composer.render();
   }
 }
