@@ -238,11 +238,12 @@ function initScene() {
   controls.addEventListener("start", () => { userTouched = true; });
 
   const key = new THREE.DirectionalLight(0xffffff, 2.6);
-  key.position.set(32, 56, 40);
+  key.position.set(26, 64, 42);
   key.castShadow = true;
   key.shadow.mapSize.set(2048, 2048);
-  key.shadow.radius = 4;
-  key.shadow.bias = -0.0007;
+  key.shadow.radius = 3;
+  key.shadow.bias = -0.0002;
+  key.shadow.normalBias = 0.55;
   const d = 40;
   Object.assign(key.shadow.camera, { left: -d, right: d, top: d + 16, bottom: -d, near: 1, far: 190 });
   key.shadow.camera.updateProjectionMatrix();
@@ -351,7 +352,7 @@ function fitCamera() {
   const fov = THREE.MathUtils.degToRad(camera.fov);
   const fitH = size.y / (2 * Math.tan(fov / 2));
   const fitW = size.x / (2 * Math.tan(fov / 2) * camera.aspect);
-  const dist = Math.max(fitH, fitW) * 1.42;
+  const dist = Math.max(fitH, fitW) * 1.32;
   // lift the figure slightly so the dock never covers the feet
   center.y -= size.y * 0.05;
 

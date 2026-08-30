@@ -1,28 +1,35 @@
 # Legoify
 
-Turn any photo into an interactive 3D LEGO mosaic — right in the browser.
+Turn a photo into a 3D brick-built LEGO character you can spin around.
 
-Upload (or drag & drop) a photo, and it's downsampled, snapped to the
-closest official LEGO brick colors, and rebuilt brick-by-brick in a live
-3D scene. Drag to rotate, scroll to zoom, and take a snapshot when it looks
-good.
+Drop in a photo and it's read for its hair, skin, shirt and trouser colours —
+each snapped to the nearest real LEGO brick colour — then a full volumetric
+figure is assembled brick by brick in 3D. Drag to rotate it, switch poses,
+recolour any part, and save a render.
+
+## How it works
+
+The figure isn't a flat mosaic. A humanoid volume is defined procedurally from
+capsules and ellipsoids (legs, hips, torso, arms, neck, head), voxelised onto a
+grid, and every surface cell becomes a real brick — studs included, and only
+where nothing sits on top. Interior bricks are culled, and the remainder are
+drawn as instanced meshes grouped by colour and stud state.
+
+Rendering uses physically-based plastic materials with clearcoat, a generated
+studio environment for reflections, and soft shadow mapping onto a
+shadow-only ground plane so the page stays pure white.
 
 ## Stack
 
-Plain HTML/CSS/JS — no build step. 3D rendering via [three.js](https://threejs.org)
-loaded from a CDN through an import map. Everything (image sampling, color
-quantization, rendering) runs client-side; no image is ever uploaded anywhere.
+Plain HTML/CSS/JS, no build step. [three.js](https://threejs.org) via CDN
+import map. Everything runs client-side — no image ever leaves the browser.
 
 ## Run locally
-
-Just serve the folder statically, e.g.:
 
 ```bash
 npx serve .
 ```
 
-Then open the printed local URL.
-
 ## Deploy
 
-Static site — deploys as-is to Vercel (or any static host), no config needed.
+Static site — deploys as-is to Vercel or any static host, no config needed.
