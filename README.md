@@ -49,9 +49,34 @@ Colour matching uses a redmean-weighted distance plus a saturation penalty, so
 near-neutral pixels land on greys and whites instead of being dragged onto a
 saturated brick (which is how white turns pink).
 
-Rendering is physically-based plastic with clearcoat, a generated studio
-environment for reflections, ACES tone mapping, and soft shadows onto a
-shadow-only ground plane so the page stays pure white.
+### Making it read as plastic
+
+Two layers of ambient occlusion, because without them an assembly looks like
+painted blocks rather than moulded plastic:
+
+- **Baked**, for the large crevices. The model is voxels, so the occlusion of
+  each brick is known exactly — it's computed from weighted neighbour occupancy
+  and rides along as a per-instance colour multiplier. No post-processing.
+- **GTAO**, for the fine detail baked AO cannot reach: the shading around every
+  stud base and brick seam.
+
+Ambient light is kept deliberately low (0.14) so that occlusion isn't washed
+out. Materials are physically-based ABS — clearcoat 1.0 over a 0.30-roughness
+base — lit by a generated studio environment.
+
+Two things this setup needs care with:
+
+- The canvas is **transparent** over the page's white. ACES tone mapping maps
+  pure white to ~0.81, so a white clear colour inside the composer renders grey;
+  keeping the background out of the 3D layer entirely avoids it.
+- The shadow-catcher plane is hidden during the AO prepass, or GTAO shades the
+  infinite ground and greys the whole page.
+
+The near/far planes track camera distance every frame — snug enough for a
+precise AO prepass, never so snug that zooming in clips into the model.
+
+Character eyes are printed round tiles (a canvas-generated texture on a
+cylinder cap), not flat bricks.
 
 ## Stack
 
