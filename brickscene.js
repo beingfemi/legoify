@@ -7,19 +7,33 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import * as BufferGeometryUtils from "three/addons/utils/BufferGeometryUtils.js";
 
 export const PALETTE = [
-  0xf4f4f4, 0xa3a2a4, 0x635f61, 0x2b2b2c, 0x1b1b1b,
-  0xc4281c, 0x7c0a02, 0xe3691c, 0xf5c400, 0xfbe6a2,
-  0x237841, 0x4b9f4c, 0x789082, 0x0055bf, 0x4c7fd6,
-  0x1e2f5c, 0x7a4bab, 0x923978, 0xe4adc8, 0xd0956a,
-  0xe4cd9e, 0xaa7f56, 0x5c3c2e, 0x958a73,
+  0xf4f4f4, 0xe6e3da, 0xc9cbc8, 0xa3a2a4, 0x898788, 0x635f61, 0x2b2b2c,
+  0x1b1b1b, 0xc4281c, 0x7c0a02, 0xe3691c, 0xb04a2f, 0xf5c400, 0xfbe6a2,
+  0x237841, 0x4b9f4c, 0x789082, 0x0055bf, 0x4c7fd6, 0x1e2f5c, 0x7a4bab,
+  0x923978, 0xe4adc8, 0xd0956a, 0xe4cd9e, 0xaa7f56, 0x5c3c2e, 0x958a73,
 ];
 
-const PAL_RGB = PALETTE.map((h) => ({ hex: h, r: (h >> 16) & 255, g: (h >> 8) & 255, b: h & 255 }));
+const sat = (r, g, b) => {
+  const mx = Math.max(r, g, b);
+  return mx === 0 ? 0 : (mx - Math.min(r, g, b)) / mx;
+};
 
+const PAL_RGB = PALETTE.map((h) => {
+  const r = (h >> 16) & 255, g = (h >> 8) & 255, b = h & 255;
+  return { hex: h, r, g, b, s: sat(r, g, b) };
+});
+
+// Nearest brick colour, weighted so that a near-neutral pixel is not dragged
+// onto a saturated brick (which is how white turns pink).
 export function snapToLego(r, g, b) {
+  const s = sat(r, g, b);
   let best = PAL_RGB[0], bd = Infinity;
   for (const c of PAL_RGB) {
-    const d = (r - c.r) ** 2 + (g - c.g) ** 2 + (b - c.b) ** 2;
+    const rm = (r + c.r) / 2;
+    const dr = r - c.r, dg = g - c.g, db = b - c.b;
+    let d = (2 + rm / 256) * dr * dr + 4 * dg * dg + (2 + (255 - rm) / 256) * db * db;
+    const over = Math.max(0, c.s - s);          // brick more colourful than the pixel
+    d += over * over * 26000;
     if (d < bd) { bd = d; best = c; }
   }
   return best.hex;
