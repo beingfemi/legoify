@@ -55,6 +55,61 @@ html, body {
 }
 .link-btn:hover { color: var(--ink); }
 
+.sub {
+  margin: 2px 0 0;
+  text-align: center;
+  font-size: .8rem;
+  line-height: 1.55;
+  color: var(--ink-dim);
+  max-width: 420px;
+}
+.sub a, a.link-btn {
+  color: var(--ink);
+  text-underline-offset: 3px;
+}
+
+/* Slider controls in the dock */
+.control {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: .78rem;
+  color: var(--ink-dim);
+}
+.control label { white-space: nowrap; }
+.control input[type="range"] {
+  accent-color: var(--ink);
+  width: 74px;
+}
+
+/* Depth-map thumbnail */
+#depthPreview {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  width: 76px;
+  height: 76px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  opacity: .85;
+  image-rendering: pixelated;
+}
+
+#bar {
+  width: 190px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+#bar i {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: var(--ink);
+  transition: width .2s;
+}
+
 /* ---------- Build ---------- */
 #buildStage { position: fixed; inset: 0; }
 
@@ -152,11 +207,15 @@ html, body {
 #loading {
   position: fixed;
   inset: 0;
+  z-index: 30;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: rgba(255,255,255,.7);
+  gap: 12px;
+  background: rgba(255,255,255,.86);
 }
+#loading p { margin: 0; font-size: .82rem; color: var(--ink-dim); }
 .spinner {
   width: 26px; height: 26px;
   border-radius: 50%;
