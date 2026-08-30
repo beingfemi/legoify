@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Legoify — Likeness</title>
+  <meta name="description" content="Run a depth model on your photo and rebuild the real shape of your face in LEGO bricks." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2218%22 fill=%22%230055bf%22/><circle cx=%2230%22 cy=%2232%22 r=%2211%22 fill=%22none%22 stroke=%22%23fff%22 stroke-width=%225%22/><circle cx=%2270%22 cy=%2232%22 r=%2211%22 fill=%22none%22 stroke=%22%23fff%22 stroke-width=%225%22/></svg>" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <section id="uploadStage">
+    <label id="dropzone" for="fileInput">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M12 16V4M12 4L7 9M12 4l5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <p><strong>Drop a photo</strong> or click to choose</p>
+      <input id="fileInput" type="file" accept="image/*" hidden />
+    </label>
+    <p class="sub">A depth model runs in your browser and rebuilds the real shape of the photo.<br />
+      Front-facing portraits on a plain background work best.</p>
+    <a class="link-btn" href="/">← character builder</a>
+  </section>
+
+  <main id="buildStage" class="hidden">
+    <canvas id="scene"></canvas>
+
+    <div id="dock">
+      <div class="control">
+        <label for="detail">Detail</label>
+        <input id="detail" type="range" min="28" max="80" step="4" value="52" />
+      </div>
+      <div class="control">
+        <label for="relief">Depth</label>
+        <input id="relief" type="range" min="4" max="26" step="1" value="14" />
+      </div>
+      <div class="control">
+        <label for="cutout">Cutout</label>
+        <input id="cutout" type="range" min="0" max="80" step="2" value="26" />
+      </div>
+      <span class="divider"></span>
+      <button id="replayBtn" class="icon-btn">Rebuild</button>
+      <button id="shotBtn" class="icon-btn">Save</button>
+      <button id="newBtn" class="icon-btn">New</button>
+    </div>
+
+    <p id="brickTally"></p>
+    <img id="depthPreview" alt="depth map" title="Depth map from the model" />
+  </main>
+
+  <div id="loading" class="hidden">
+    <span class="spinner"></span>
+    <p id="loadingText">Loading depth model…</p>
+    <div id="bar"><i></i></div>
+  </div>
+
+  <canvas id="sourceCanvas" hidden></canvas>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+  <script type="module" src="depth.js"></script>
+</body>
+</html>

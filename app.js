@@ -1,40 +1,18 @@
+// Photo → a brick-built LEGO character.
+// The photo supplies the palette; the figure is a procedural humanoid volume.
 import * as THREE from "three";
-import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
-import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import * as BufferGeometryUtils from "three/addons/utils/BufferGeometryUtils.js";
+import { BrickScene, PALETTE, snapToLego, BH } from "./brickscene.js";
 
-// ─────────────────────────── LEGO palette ───────────────────────────
-const PALETTE = [
-  0xf4f4f4, 0xa3a2a4, 0x635f61, 0x2b2b2c, 0x1b1b1b,
-  0xc4281c, 0x7c0a02, 0xe3691c, 0xf5c400, 0xfbe6a2,
-  0x237841, 0x4b9f4c, 0x789082, 0x0055bf, 0x4c7fd6,
-  0x1e2f5c, 0x7a4bab, 0x923978, 0xe4adc8, 0xd0956a,
-  0xe4cd9e, 0xaa7f56, 0x5c3c2e, 0x958a73,
-];
-
-const toRGB = (h) => ({ r: (h >> 16) & 255, g: (h >> 8) & 255, b: h & 255 });
-const PAL_RGB = PALETTE.map((h) => ({ hex: h, ...toRGB(h) }));
-
-function snapToLego(r, g, b) {
-  let best = PAL_RGB[0], bd = Infinity;
-  for (const c of PAL_RGB) {
-    const d = (r - c.r) ** 2 + (g - c.g) ** 2 + (b - c.b) ** 2;
-    if (d < bd) { bd = d; best = c; }
-  }
-  return best.hex;
-}
-
-// Character colors, sampled from the photo (and user-editable).
+// Character colours, sampled from the photo (and user-editable).
 let COLORS = { hair: 0x5c3c2e, skin: 0xd0956a, shirt: 0xc4281c, pants: 0x1e2f5c, shoe: 0x1b1b1b };
 const SWATCH_KEYS = ["hair", "skin", "shirt", "pants", "shoe"];
 const SWATCH_LABELS = { hair: "Hair", skin: "Skin", shirt: "Shirt", pants: "Legs", shoe: "Shoes" };
 const EYE = 0x1b1b1b;
 
-// ─────────────────────── Photo → character colors ───────────────────────
+// ─────────────────── Photo → character colours ───────────────────
 const srcCanvas = document.getElementById("sourceCanvas");
 
-// Most-common LEGO color inside a normalized region of the image.
+// Most-common LEGO colour inside a normalised region of the image.
 function dominantIn(data, W, H, x0, y0, x1, y1) {
   const counts = new Map();
   const ax = Math.floor(x0 * W), bx = Math.ceil(x1 * W);
@@ -71,11 +49,7 @@ function readColorsFromImage(img) {
   renderSwatches();
 }
 
-// ─────────────────────────── Geometry helpers ───────────────────────────
-const BW = 1.0;   // brick width / depth (world units)
-const BH = 1.2;   // brick height
-
-const v3 = new THREE.Vector3();
+// ─────────────────────── Geometry helpers ───────────────────────
 const pa = new THREE.Vector3(), pb = new THREE.Vector3(), pab = new THREE.Vector3();
 
 function distToSegment(px, py, pz, ax, ay, az, bx, by, bz) {
@@ -90,8 +64,8 @@ function distToSegment(px, py, pz, ax, ay, az, bx, by, bz) {
 const inEllipsoid = (px, py, pz, cx, cy, cz, rx, ry, rz) =>
   ((px - cx) / rx) ** 2 + ((py - cy) / ry) ** 2 + ((pz - cz) / rz) ** 2 <= 1;
 
-// ─────────────────────────── Character model ───────────────────────────
-// Grid indices; world = (ix*BW, iy*BH, iz*BW). Figure stands on y = 0.
+// ─────────────────────── Character model ───────────────────────
+// Grid indices; world = (ix, iy*BH, iz). Figure stands on y = 0.
 const GX = 16, GY = 48, GZ = 11;
 
 const SHOULDER_Y = 37.6;
@@ -117,7 +91,7 @@ function buildVoxels() {
   for (let ix = -GX; ix <= GX; ix++) {
     for (let iy = 0; iy <= GY; iy++) {
       for (let iz = -GZ; iz <= GZ; iz++) {
-        const x = ix * BW, y = iy * BH, z = iz * BW;
+        const x = ix, y = iy * BH, z = iz;
         let c = null;
 
         // legs — kept far enough apart to leave a real gap
@@ -171,7 +145,7 @@ function buildVoxels() {
   return vox;
 }
 
-// Eyes + mouth: recolor the frontmost voxel of the head at given heights.
+// Eyes, nose and mouth: recolour the frontmost voxel of the head at set heights.
 function addFace(vox, key) {
   const frontmost = (ix, iy) => {
     for (let iz = GZ; iz >= -GZ; iz--) if (vox.has(key(ix, iy, iz))) return iz;
@@ -179,17 +153,14 @@ function addFace(vox, key) {
   };
   const row = (worldY) => Math.round(worldY / BH);
 
-  // eyes — two bricks wide each
   const eyeRow = row(48.4);
   for (const ix of [-4, -3, 3, 4]) {
     const iz = frontmost(ix, eyeRow);
     if (iz !== null) vox.set(key(ix, eyeRow, iz), EYE);
   }
-  // nose — one brick pushed proud of the face
   const noseRow = row(46.0);
   const noseZ = frontmost(0, noseRow);
   if (noseZ !== null) vox.set(key(0, noseRow, noseZ + 1), COLORS.skin);
-  // mouth
   const mouthRow = row(43.0);
   for (const ix of [-1, 0, 1]) {
     const iz = frontmost(ix, mouthRow);
@@ -197,216 +168,17 @@ function addFace(vox, key) {
   }
 }
 
-// ─────────────────────────── Brick geometry ───────────────────────────
-const brickPlain = new RoundedBoxGeometry(BW * 0.98, BH * 0.98, BW * 0.98, 2, 0.055).toNonIndexed();
-const studGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.24, 18).toNonIndexed();
-studGeo.translate(0, BH * 0.49 + 0.11, 0);
-const brickStudded = BufferGeometryUtils.mergeGeometries([brickPlain, studGeo], false);
-
-// ─────────────────────────── Scene ───────────────────────────
-let renderer, scene, camera, controls, figure;
-let anims = [], animating = false, animStart = 0;
-let userTouched = false;
-
-const canvas = document.getElementById("scene");
-const loadingEl = document.getElementById("loading");
-const tallyEl = document.getElementById("brickTally");
-
-function initScene() {
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-  renderer.setClearColor(0xffffff, 1);
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-
-  scene = new THREE.Scene();
-
-  // Studio reflections (no external assets).
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-
-  camera = new THREE.PerspectiveCamera(34, 1, 0.5, 500);
-  camera.position.set(30, 26, 88);
-
-  controls = new OrbitControls(camera, canvas);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.07;
-  controls.target.set(0, 22, 0);
-  controls.addEventListener("start", () => { userTouched = true; });
-
-  const key = new THREE.DirectionalLight(0xffffff, 2.6);
-  key.position.set(26, 64, 42);
-  key.castShadow = true;
-  key.shadow.mapSize.set(2048, 2048);
-  key.shadow.radius = 3;
-  key.shadow.bias = -0.0002;
-  key.shadow.normalBias = 0.55;
-  const d = 40;
-  Object.assign(key.shadow.camera, { left: -d, right: d, top: d + 16, bottom: -d, near: 1, far: 190 });
-  key.shadow.camera.updateProjectionMatrix();
-  scene.add(key);
-
-  const rim = new THREE.DirectionalLight(0xffffff, 0.7);
-  rim.position.set(-34, 26, -32);
-  scene.add(rim);
-  scene.add(new THREE.AmbientLight(0xffffff, 0.35));
-
-  // Shadow-only ground keeps the page pure white.
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(300, 300),
-    new THREE.ShadowMaterial({ opacity: 0.17 })
-  );
-  ground.rotation.x = -Math.PI / 2;
-  ground.receiveShadow = true;
-  scene.add(ground);
-
-  addEventListener("resize", onResize);
-  onResize();
-  renderer.setAnimationLoop(tick);
-}
-
-function onResize() {
-  if (!renderer) return;
-  const w = innerWidth, h = innerHeight;
-  renderer.setSize(w, h, false);
-  camera.aspect = w / h;
-  camera.updateProjectionMatrix();
-  if (figure) fitCamera();
-}
-
-// ─────────────────────────── Assembly ───────────────────────────
-const dummy = new THREE.Object3D();
-
-function buildFigure() {
-  if (figure) {
-    scene.remove(figure);
-    figure.traverse((o) => { if (o.isInstancedMesh) { o.geometry.dispose?.(); o.material.dispose?.(); } });
-  }
-  figure = new THREE.Group();
-  anims = [];
-
-  const vox = buildVoxels();
-  const has = (x, y, z) => vox.has(`${x},${y},${z}`);
-
-  // Only keep bricks on the surface; group them by colour and stud/no-stud.
-  const buckets = new Map();
-  for (const [k, color] of vox) {
-    const [x, y, z] = k.split(",").map(Number);
-    const enclosed =
-      has(x + 1, y, z) && has(x - 1, y, z) &&
-      has(x, y + 1, z) && has(x, y - 1, z) &&
-      has(x, y, z + 1) && has(x, y, z - 1);
-    if (enclosed) continue;
-
-    const studded = !has(x, y + 1, z);
-    const bk = `${color}|${studded}`;
-    if (!buckets.has(bk)) buckets.set(bk, { color, studded, cells: [] });
-    buckets.get(bk).cells.push([x, y, z]);
-  }
-
-  let total = 0;
-  for (const { color, studded, cells } of buckets.values()) {
-    const mat = new THREE.MeshPhysicalMaterial({
-      color,
-      roughness: 0.38,
-      metalness: 0.0,
-      clearcoat: 0.55,
-      clearcoatRoughness: 0.28,
-    });
-    const mesh = new THREE.InstancedMesh(studded ? brickStudded : brickPlain, mat, cells.length);
-    mesh.castShadow = mesh.receiveShadow = true;
-    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-
-    cells.forEach(([x, y, z], i) => {
-      const target = new THREE.Vector3(x * BW, y * BH + BH / 2, z * BW);
-      dummy.position.copy(target);
-      dummy.scale.setScalar(1);
-      dummy.updateMatrix();
-      mesh.setMatrixAt(i, dummy.matrix);
-      anims.push({
-        mesh, i, target,
-        from: target.y + 16 + Math.random() * 22,
-        delay: 0.16 + (y / GY) * 0.75 + Math.random() * 0.28,
-      });
-      total++;
-    });
-    mesh.instanceMatrix.needsUpdate = true;
-    figure.add(mesh);
-  }
-
-  scene.add(figure);
-  tallyEl.textContent = `${total.toLocaleString()} bricks`;
-  fitCamera();
-  startAssembly();
-}
-
-// Frame the whole figure, keeping whatever direction the user is viewing from.
-function fitCamera() {
-  const box = new THREE.Box3().setFromObject(figure);
-  const size = box.getSize(new THREE.Vector3());
-  const center = box.getCenter(new THREE.Vector3());
-
-  const fov = THREE.MathUtils.degToRad(camera.fov);
-  const fitH = size.y / (2 * Math.tan(fov / 2));
-  const fitW = size.x / (2 * Math.tan(fov / 2) * camera.aspect);
-  const dist = Math.max(fitH, fitW) * 1.32;
-  // lift the figure slightly so the dock never covers the feet
-  center.y -= size.y * 0.05;
-
-  const dir = camera.position.clone().sub(controls.target);
-  if (dir.lengthSq() < 1e-6) dir.set(0.34, 0.2, 1);
-  dir.normalize();
-
-  controls.target.copy(center);
-  camera.position.copy(center).addScaledVector(dir, dist);
-  controls.minDistance = dist * 0.35;
-  controls.maxDistance = dist * 3.5;
-  controls.update();
-}
-
-function startAssembly() {
-  animStart = performance.now() / 1000;
-  animating = true;
-}
-
-function tick() {
-  if (animating) {
-    const t = performance.now() / 1000 - animStart;
-    let busy = false;
-    const touched = new Set();
-    for (const a of anims) {
-      let p;
-      if (t < a.delay) { p = 0; busy = true; }
-      else {
-        p = Math.min(1, (t - a.delay) / 0.42);
-        if (p < 1) busy = true;
-      }
-      const e = 1 - Math.pow(1 - p, 3);
-      dummy.position.set(a.target.x, THREE.MathUtils.lerp(a.from, a.target.y, e), a.target.z);
-      dummy.scale.setScalar(THREE.MathUtils.lerp(0.35, 1, e));
-      dummy.updateMatrix();
-      a.mesh.setMatrixAt(a.i, dummy.matrix);
-      touched.add(a.mesh);
-    }
-    for (const m of touched) m.instanceMatrix.needsUpdate = true;
-    animating = busy;
-  }
-
-  if (figure && !userTouched && !animating) figure.rotation.y += 0.0018;
-  controls.update();
-  renderer.render(scene, camera);
-}
-
 // ─────────────────────────── UI ───────────────────────────
+let scene = null;
+
 const uploadStage = document.getElementById("uploadStage");
 const buildStage = document.getElementById("buildStage");
 const dropzone = document.getElementById("dropzone");
 const fileInput = document.getElementById("fileInput");
 const swatchesEl = document.getElementById("swatches");
 const popEl = document.getElementById("palettePop");
+const loadingEl = document.getElementById("loading");
+const tallyEl = document.getElementById("brickTally");
 
 function renderSwatches() {
   swatchesEl.innerHTML = "";
@@ -429,7 +201,7 @@ function openPalette(anchor, slot) {
       COLORS[slot] = hex;
       renderSwatches();
       popEl.classList.add("hidden");
-      buildFigure();
+      rebuild();
     });
     popEl.appendChild(b);
   }
@@ -440,13 +212,19 @@ function openPalette(anchor, slot) {
 }
 addEventListener("click", () => popEl.classList.add("hidden"));
 
+function rebuild() {
+  const n = scene.setVoxels(buildVoxels());
+  tallyEl.textContent = `${n.toLocaleString()} bricks`;
+}
+
 function enterBuild() {
   uploadStage.classList.add("hidden");
   buildStage.classList.remove("hidden");
-  if (!renderer) initScene(); else onResize();
   loadingEl.classList.remove("hidden");
   requestAnimationFrame(() => requestAnimationFrame(() => {
-    buildFigure();
+    if (!scene) scene = new BrickScene(document.getElementById("scene"));
+    else scene.resize();
+    rebuild();
     loadingEl.classList.add("hidden");
   }));
 }
@@ -482,19 +260,11 @@ document.getElementById("poses").addEventListener("click", (e) => {
   if (!btn) return;
   document.querySelectorAll(".pose-btn").forEach((b) => b.classList.toggle("is-active", b === btn));
   currentPose = btn.dataset.pose;
-  buildFigure();
+  rebuild();
 });
 
-document.getElementById("replayBtn").addEventListener("click", startAssembly);
-
-document.getElementById("shotBtn").addEventListener("click", () => {
-  renderer.render(scene, camera);
-  const a = document.createElement("a");
-  a.download = "legoify.png";
-  a.href = renderer.domElement.toDataURL("image/png");
-  a.click();
-});
-
+document.getElementById("replayBtn").addEventListener("click", () => scene?.replay());
+document.getElementById("shotBtn").addEventListener("click", () => scene?.snapshot("legoify-character.png"));
 document.getElementById("newBtn").addEventListener("click", () => {
   buildStage.classList.add("hidden");
   uploadStage.classList.remove("hidden");
