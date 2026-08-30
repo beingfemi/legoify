@@ -98,9 +98,13 @@ export class BrickScene {
     this.brickCount = 0;
     this._dummy = new THREE.Object3D();
 
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+    // Transparent canvas over the page's white: keeps the background out of the
+    // tone mapper, which would otherwise render pure white as ~0.81 grey.
+    const renderer = new THREE.WebGLRenderer({
+      canvas, antialias: true, alpha: true, preserveDrawingBuffer: true,
+    });
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-    renderer.setClearColor(0xffffff, 1);
+    renderer.setClearColor(0x000000, 0);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.05;
@@ -151,7 +155,9 @@ export class BrickScene {
     // Ground-truth ambient occlusion around stud bases and brick seams — the
     // detail that makes an assembly read as plastic rather than painted blocks.
     const composer = new EffectComposer(renderer);
-    composer.addPass(new RenderPass(scene, this.camera));
+    const renderPass = new RenderPass(scene, this.camera);
+    renderPass.clearAlpha = 0;
+    composer.addPass(renderPass);
     const gtao = new GTAOPass(scene, this.camera, innerWidth, innerHeight);
     gtao.output = GTAOPass.OUTPUT.Default;
     gtao.blendIntensity = 0.85;
@@ -163,6 +169,15 @@ export class BrickScene {
       lumaPhi: 10, depthPhi: 2, normalPhi: 3,
       radius: 3, radiusExponent: 1, rings: 2, samples: 8,
     });
+    // The shadow-catcher plane must stay out of the AO prepass, or GTAO shades
+    // the infinite ground and the white page turns grey.
+    const gtaoRender = gtao.render.bind(gtao);
+    gtao.render = (...args) => {
+      ground.visible = false;
+      gtaoRender(...args);
+      ground.visible = true;
+    };
+
     composer.addPass(gtao);
     composer.addPass(new OutputPass());
     this.composer = composer;
