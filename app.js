@@ -141,11 +141,12 @@ function buildVoxels() {
     }
   }
 
-  addFace(vox, key);
-  return vox;
+  const eyes = addFace(vox, key);
+  return { vox, eyes };
 }
 
-// Eyes, nose and mouth: recolour the frontmost voxel of the head at set heights.
+// Brow, nose and mouth are brick; the eyes come back as anchors so they can be
+// built as printed round tiles instead of flat blocks.
 function addFace(vox, key) {
   const frontmost = (ix, iy) => {
     for (let iz = GZ; iz >= -GZ; iz--) if (vox.has(key(ix, iy, iz))) return iz;
@@ -154,18 +155,91 @@ function addFace(vox, key) {
   const row = (worldY) => Math.round(worldY / BH);
 
   const eyeRow = row(48.4);
-  for (const ix of [-4, -3, 3, 4]) {
-    const iz = frontmost(ix, eyeRow);
-    if (iz !== null) vox.set(key(ix, eyeRow, iz), EYE);
+  const eyes = [];
+  for (const cx of [-3.5, 3.5]) {
+    const a = frontmost(Math.round(cx - 0.5), eyeRow);
+    const b = frontmost(Math.round(cx + 0.5), eyeRow);
+    if (a === null && b === null) continue;
+    // sit against the shallower of the two columns so the tile looks seated
+    const iz = Math.min(a ?? b, b ?? a);
+    eyes.push({ x: cx, y: eyeRow * BH + BH / 2, z: iz + 0.5 });
   }
+
+  // brow, two rows up
+  const browRow = eyeRow + 2;
+  for (const ix of [-4, -3, 3, 4]) {
+    const iz = frontmost(ix, browRow);
+    if (iz !== null) vox.set(key(ix, browRow, iz), COLORS.hair);
+  }
+
   const noseRow = row(46.0);
   const noseZ = frontmost(0, noseRow);
   if (noseZ !== null) vox.set(key(0, noseRow, noseZ + 1), COLORS.skin);
+
   const mouthRow = row(43.0);
   for (const ix of [-1, 0, 1]) {
     const iz = frontmost(ix, mouthRow);
     if (iz !== null) vox.set(key(ix, mouthRow, iz), 0x5c3c2e);
   }
+  return eyes;
+}
+
+// ─────────────────── Printed eye tiles ───────────────────
+let eyeTexture = null;
+
+function makeEyeTexture() {
+  const c = document.createElement("canvas");
+  c.width = c.height = 256;
+  const g = c.getContext("2d");
+
+  g.fillStyle = "#f6f5f2";                      // sclera
+  g.beginPath(); g.arc(128, 128, 126, 0, 7); g.fill();
+
+  g.fillStyle = "#3f2a1b";                      // iris
+  g.beginPath(); g.arc(128, 134, 62, 0, 7); g.fill();
+  g.fillStyle = "#0d0d0d";                      // pupil
+  g.beginPath(); g.arc(128, 134, 31, 0, 7); g.fill();
+
+  g.fillStyle = "rgba(255,255,255,.92)";        // catchlight
+  g.beginPath(); g.arc(104, 104, 22, 0, 7); g.fill();
+  g.fillStyle = "rgba(255,255,255,.5)";
+  g.beginPath(); g.arc(150, 158, 9, 0, 7); g.fill();
+
+  g.strokeStyle = "rgba(0,0,0,.22)";            // moulded rim
+  g.lineWidth = 9;
+  g.beginPath(); g.arc(128, 128, 121, 0, 7); g.stroke();
+
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  return t;
+}
+
+function buildEyes(anchors) {
+  if (!anchors.length) return null;
+  if (!eyeTexture) eyeTexture = makeEyeTexture();
+
+  const group = new THREE.Group();
+  const R = 0.85, D = 0.26;
+  const geo = new THREE.CylinderGeometry(R, R, D, 32);
+  geo.rotateX(Math.PI / 2);                     // cap faces +Z, like a printed tile
+
+  const rim = new THREE.MeshPhysicalMaterial({
+    color: 0xf4f4f4, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.12,
+  });
+  const printed = new THREE.MeshPhysicalMaterial({
+    map: eyeTexture, roughness: 0.18, clearcoat: 1, clearcoatRoughness: 0.06,
+    envMapIntensity: 1.3,
+  });
+
+  for (const a of anchors) {
+    // [side, +cap, -cap] for a cylinder
+    const m = new THREE.Mesh(geo, [rim, printed, rim]);
+    m.position.set(a.x, a.y, a.z + D / 2 - 0.04);
+    m.castShadow = m.receiveShadow = true;
+    group.add(m);
+  }
+  return group;
 }
 
 // ─────────────────────────── UI ───────────────────────────
@@ -213,7 +287,8 @@ function openPalette(anchor, slot) {
 addEventListener("click", () => popEl.classList.add("hidden"));
 
 function rebuild() {
-  const n = scene.setVoxels(buildVoxels());
+  const { vox, eyes } = buildVoxels();
+  const n = scene.setVoxels(vox, buildEyes(eyes));
   tallyEl.textContent = `${n.toLocaleString()} bricks`;
 }
 

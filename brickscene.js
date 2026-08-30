@@ -43,10 +43,43 @@ export function snapToLego(r, g, b) {
 export const BW = 1.0;
 export const BH = 1.2;
 
-const brickPlain = new RoundedBoxGeometry(BW * 0.98, BH * 0.98, BW * 0.98, 2, 0.055).toNonIndexed();
-const studGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.24, 18).toNonIndexed();
-studGeo.translate(0, BH * 0.49 + 0.11, 0);
+const brickPlain = new RoundedBoxGeometry(BW * 0.97, BH * 0.97, BW * 0.97, 3, 0.045).toNonIndexed();
+// Real studs taper very slightly and have a softened top edge.
+const studGeo = new THREE.CylinderGeometry(0.292, 0.303, 0.25, 24).toNonIndexed();
+studGeo.translate(0, BH * 0.485 + 0.115, 0);
 const brickStudded = BufferGeometryUtils.mergeGeometries([brickPlain, studGeo], false);
+
+// Analytic ambient occlusion. Because the model is voxels we know exactly what
+// surrounds each brick, so crevices can be darkened without any post-processing.
+const AO_OFFSETS = (() => {
+  const R = 2, out = [];
+  for (let dz = -R; dz <= R; dz++)
+    for (let dy = -R; dy <= R; dy++)
+      for (let dx = -R; dx <= R; dx++) {
+        if (!dx && !dy && !dz) continue;
+        const d = Math.hypot(dx, dy, dz);
+        if (d > R + 0.25) continue;
+        out.push([dx, dy, dz, 1 / d]);
+      }
+  return out;
+})();
+const AO_WTOTAL = AO_OFFSETS.reduce((s, o) => s + o[3], 0);
+
+// An unoccluded flat wall sits near 0.5; anything above that is a crevice.
+const AO_KNEE = 0.46;
+const AO_STRENGTH = 1.15;
+const AO_FLOOR = 0.30;
+
+function occlusionAt(vox, x, y, z) {
+  let occ = 0;
+  for (let i = 0; i < AO_OFFSETS.length; i++) {
+    const o = AO_OFFSETS[i];
+    if (vox.has(`${x + o[0]},${y + o[1]},${z + o[2]}`)) occ += o[3];
+  }
+  const ratio = occ / AO_WTOTAL;
+  const t = Math.max(0, ratio - AO_KNEE) / (1 - AO_KNEE);
+  return Math.max(AO_FLOOR, 1 - AO_STRENGTH * t);
+}
 
 export class BrickScene {
   constructor(canvas) {
@@ -94,10 +127,11 @@ export class BrickScene {
     scene.add(key);
     this.keyLight = key;
 
-    const rim = new THREE.DirectionalLight(0xffffff, 0.7);
+    const rim = new THREE.DirectionalLight(0xffffff, 0.6);
     rim.position.set(-34, 26, -32);
     scene.add(rim);
-    scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+    // Kept low on purpose — a strong ambient fill washes the baked AO out.
+    scene.add(new THREE.AmbientLight(0xffffff, 0.14));
 
     // Shadow-only ground keeps the page pure white.
     const ground = new THREE.Mesh(
@@ -123,15 +157,22 @@ export class BrickScene {
   }
 
   // vox: Map keyed "x,y,z" (grid indices) → colour hex.
-  setVoxels(vox) {
+  // details: optional Object3D of non-brick parts (printed eyes, etc.) that
+  // should ride along with the model and fade in once it is built.
+  setVoxels(vox, details = null) {
     if (this.figure) {
       this.scene.remove(this.figure);
       this.figure.traverse((o) => {
-        if (o.isInstancedMesh) { o.material.dispose?.(); }
+        if (o.isMesh || o.isInstancedMesh) {
+          o.geometry?.dispose?.();
+          if (Array.isArray(o.material)) o.material.forEach((m) => m.dispose?.());
+          else o.material?.dispose?.();
+        }
       });
     }
     this.figure = new THREE.Group();
     this.anims = [];
+    this.details = details;
 
     const has = (x, y, z) => vox.has(`${x},${y},${z}`);
 
@@ -154,11 +195,13 @@ export class BrickScene {
     }
 
     const dummy = this._dummy;
+    const tint = new THREE.Color();
     let total = 0;
     for (const { color, studded, cells } of buckets.values()) {
       const mat = new THREE.MeshPhysicalMaterial({
-        color, roughness: 0.38, metalness: 0.0,
-        clearcoat: 0.55, clearcoatRoughness: 0.28,
+        color, roughness: 0.30, metalness: 0.0,
+        clearcoat: 1.0, clearcoatRoughness: 0.14,
+        envMapIntensity: 1.15,
       });
       const mesh = new THREE.InstancedMesh(studded ? brickStudded : brickPlain, mat, cells.length);
       mesh.castShadow = mesh.receiveShadow = true;
@@ -170,6 +213,11 @@ export class BrickScene {
         dummy.scale.setScalar(1);
         dummy.updateMatrix();
         mesh.setMatrixAt(i, dummy.matrix);
+
+        // Baked AO rides along as a per-instance multiplier on the brick colour.
+        const ao = occlusionAt(vox, x, y, z);
+        mesh.setColorAt(i, tint.setRGB(ao, ao, ao));
+
         this.anims.push({
           mesh, i, target,
           from: target.y + 16 + Math.random() * 22,
@@ -178,7 +226,13 @@ export class BrickScene {
         total++;
       });
       mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
       this.figure.add(mesh);
+    }
+
+    if (details) {
+      details.scale.setScalar(0.001);
+      this.figure.add(details);
     }
 
     this.scene.add(this.figure);
@@ -258,6 +312,13 @@ export class BrickScene {
         touched.add(a.mesh);
       }
       for (const m of touched) m.instanceMatrix.needsUpdate = true;
+
+      // Printed parts settle in just after the last brick lands.
+      if (this.details) {
+        const p = THREE.MathUtils.clamp((t - 1.15) / 0.45, 0, 1);
+        const e = 1 - Math.pow(1 - p, 3);
+        this.details.scale.setScalar(Math.max(0.001, e));
+      }
       this.animating = busy;
     }
 
