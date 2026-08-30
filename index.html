@@ -3,77 +3,49 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Legoify — turn any photo into a 3D LEGO mosaic</title>
-  <meta name="description" content="Upload a photo and watch it build itself, brick by brick, into an interactive 3D LEGO mosaic you can spin and zoom." />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2218%22 fill=%22%23d01012%22/><circle cx=%2230%22 cy=%2230%22 r=%2212%22 fill=%22%23d01012%22 stroke=%22%23fff%22 stroke-width=%224%22/><circle cx=%2270%22 cy=%2230%22 r=%2212%22 fill=%22%23d01012%22 stroke=%22%23fff%22 stroke-width=%224%22/></svg>" />
+  <title>Legoify</title>
+  <meta name="description" content="Turn a photo into a 3D brick-built LEGO character you can spin around." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2218%22 fill=%22%23c8511b%22/><circle cx=%2230%22 cy=%2232%22 r=%2211%22 fill=%22none%22 stroke=%22%23fff%22 stroke-width=%225%22/><circle cx=%2270%22 cy=%2232%22 r=%2211%22 fill=%22none%22 stroke=%22%23fff%22 stroke-width=%225%22/></svg>" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div id="app">
-    <header class="topbar">
-      <div class="brand">
-        <span class="stud"></span>
-        <h1>Legoify</h1>
+  <!-- Upload -->
+  <section id="uploadStage">
+    <label id="dropzone" for="fileInput">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M12 16V4M12 4L7 9M12 4l5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <p><strong>Drop a photo</strong> or click to choose</p>
+      <input id="fileInput" type="file" accept="image/*" hidden />
+    </label>
+    <button id="sampleBtn" class="link-btn">or try a sample</button>
+  </section>
+
+  <!-- Build -->
+  <main id="buildStage" class="hidden">
+    <canvas id="scene"></canvas>
+
+    <div id="loading" class="hidden"><span class="spinner"></span></div>
+
+    <div id="dock">
+      <div class="swatches" id="swatches"></div>
+      <span class="divider"></span>
+      <div class="poses" id="poses">
+        <button class="pose-btn is-active" data-pose="stand" title="Stand">Stand</button>
+        <button class="pose-btn" data-pose="point" title="Point">Point</button>
+        <button class="pose-btn" data-pose="cheer" title="Cheer">Cheer</button>
       </div>
-      <p class="tagline">Turn a photo into an interactive LEGO character.</p>
-    </header>
+      <span class="divider"></span>
+      <button id="replayBtn" class="icon-btn" title="Replay build">Rebuild</button>
+      <button id="shotBtn" class="icon-btn" title="Save image">Save</button>
+      <button id="newBtn" class="icon-btn" title="New photo">New</button>
+    </div>
 
-    <main>
-      <section id="uploadStage" class="stage">
-        <label id="dropzone" for="fileInput">
-          <div class="dz-inner">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M12 16V4M12 4L7 9M12 4l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            <p><strong>Drop a photo</strong> or click to choose one</p>
-            <p class="hint">Best with a clear face or portrait, square-ish photos work great.</p>
-          </div>
-          <input id="fileInput" type="file" accept="image/*" hidden />
-        </label>
+    <p id="brickTally"></p>
+  </main>
 
-        <div class="examples">
-          <span>No photo handy? Try:</span>
-          <button class="example-btn" data-example="smiley">😀 Sample face</button>
-        </div>
-      </section>
-
-      <section id="buildStage" class="stage hidden">
-        <div class="controls">
-          <div class="control-group">
-            <label for="resolution">Detail<span id="resVal">32</span>×</label>
-            <input id="resolution" type="range" min="12" max="48" step="2" value="32" />
-          </div>
-          <div class="control-group">
-            <label for="brickHeight">Height</label>
-            <input id="brickHeight" type="range" min="0.4" max="2.5" step="0.1" value="1" />
-          </div>
-          <button id="rebuildBtn" class="btn">Rebuild</button>
-          <button id="newPhotoBtn" class="btn ghost">New photo</button>
-          <button id="screenshotBtn" class="btn ghost">📸 Snapshot</button>
-        </div>
-
-        <div id="canvasWrap">
-          <canvas id="scene"></canvas>
-          <div id="loadingOverlay" class="overlay hidden">
-            <div class="spinner"></div>
-            <p id="loadingText">Building bricks…</p>
-          </div>
-          <div class="hint-overlay">Drag to rotate · Scroll to zoom</div>
-        </div>
-
-        <div class="stats">
-          <span id="brickCount">0 bricks</span>
-          <span id="colorCount">0 colors</span>
-        </div>
-      </section>
-    </main>
-
-    <footer>
-      <p>Built for fun with three.js. Nothing leaves your browser — images are processed locally.</p>
-    </footer>
-  </div>
-
+  <div id="palettePop" class="hidden"></div>
   <canvas id="sourceCanvas" hidden></canvas>
 
   <script type="importmap">
